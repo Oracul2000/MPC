@@ -1,0 +1,52 @@
+# --- Python ---
+# Кэш байт-кода Python
+__pycache__/
+*.py[cod]
+
+# Виртуальные окружения
+venv/
+env/
+.venv/
+
+# Конфигурационные и временные файлы
+*.env
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Логи, покрытия и прочее
+.coverage
+*.py,cover
+.cache/
+.ipynb_checkpoints/
+
+# --- C++ ---
+# Файлы объектного кода
+*.o
+*.obj
+
+# Файлы скомпилированных библиотек и исполняемых файлов
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+
+# Каталоги сборки
+build/
+cmake-build-*/
+
+# Лог-файлы и другие временные файлы
+*.log
+
+# IDE и редакторы (пример для CLion, VSCode, Visual Studio)
+.idea/
+.vscode/
+*.code-workspace
+*.VC.db
+*.VC.VC.opendb
+
+# Другие временные или системные файлы
+.DS_Store
+Thumbs.db

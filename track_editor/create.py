@@ -26,10 +26,14 @@ def gen_P_track(x1=5, y1=25, r1=5, name=None):
     # plt.axis('equal')
     # plt.savefig('./track_editor/P_track.png')
     
-    return (
+    x_merged, y_merged = (
             np.concatenate((first_sector['x'], second_sector['x'], third_sector['x'])),
             np.concatenate((first_sector['y'], second_sector['y'], third_sector['y']))
             )
     
+    points = np.stack((x_merged, y_merged), axis=1)
+    print(points.shape)
+    return points
+    
 if __name__ == '__main__':
-    print(gen_P_track())
+    gen_P_track()

@@ -301,6 +301,10 @@ class Dynamic4WheelsModel:
         self.carState = self.carState + ((k1 + (k2 * 2) + (k3 * 2) + k4) * (h / 6))
         self.t += dt
         
+    def updateEuler(self, input):
+        self.carState = self.carState + self.Derivatives(input, self.carState) * dt
+        self.t += dt
+        
     def __repr__(self):
         state_string = f'{round(self.gett(), 3)} (x={round(self.getX(), 3)}, y={round(self.getY(), 3)}, yaw={round(self.getyaw(), 3)}), '
         velocities_string = f'(vx={round(self.getvx(), 3)}, vy={round(self.getvy(), 3)}, omega={round(self.getr(), 3)})'

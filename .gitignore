@@ -52,3 +52,4 @@ cmake-build-*/
 Thumbs.db
 
 *.png
+*.mp4

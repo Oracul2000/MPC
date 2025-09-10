@@ -10,7 +10,7 @@ import numpy as np
 
 # model = Dynamic4WheelsModel()
 # model.carState.body.yaw = -np.pi / 2
-path, center_line_x, center_line_y = gen_P_track()
+path, center_line_x, center_line_y = gen_double_P_track()
 
 # контроллеры
 pp = PurePursuitController(path, wheelbase=1.5, lookahead_base=1.0, lookahead_gain=0.2, max_lookahead=2.0)

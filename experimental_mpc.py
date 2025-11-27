@@ -18,6 +18,8 @@ v_ref = 30.0
 
 steps_per_control_update = int(dt / 0.001)
 
+y_opts = []
+
 print(f"Controller dt: {dt}s, Model dt: 0.001s. Running {steps_per_control_update} model steps per control step.")
 
 for step in range(200):
@@ -29,7 +31,8 @@ for step in range(200):
     vehicle_traj['yaw'].append(yaw)
     vehicle_traj['v'].append(v)
 
-    throttle, steering = mpc.compute_control(x, y, yaw, v, v_ref)
+    throttle, steering, optimal_traj = mpc.compute_control(x, y, yaw, v, v_ref)
+    y_opts.append(optimal_traj)
     
     brakes = 0.0
     if throttle < 0:
@@ -48,6 +51,13 @@ plt.figure(figsize=(12, 8))
 plt.plot(center_line_x, center_line_y, 'g--', label='Track Centerline')
 plt.plot(vehicle_traj['x'], vehicle_traj['y'], 'b-', label='MPC Trajectory')
 plt.plot(vehicle_traj['v'])
+
+for i in range(0, len(y_opts), 100):
+    traj = y_opts[i]
+    print(traj)
+    print(traj.shape)
+    plt.plot(traj[:, 0], traj[:, 1])
+    
 plt.title('MPC speed')
 plt.xlabel('X (m)')
 plt.ylabel('Y (m)')

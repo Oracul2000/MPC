@@ -57,4 +57,4 @@ class MPCController:
             method='SLSQP', bounds=bounds
         )
         u_opt = result.x.reshape((self.horizon, 2))
-        return u_opt[0, 0], u_opt[0, 1]  # Return first control: throttle, steering
+        return u_opt[0, 0], u_opt[0, 1], result  # Return first control: throttle, steering

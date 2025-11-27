@@ -67,4 +67,4 @@ class LongitudinalPID:
     def compute(self, v_ref, v_curr, dt=None, current_time=None):
         error = v_ref - v_curr
         out = self.pid.compute(error, dt=dt, current_time=current_time)
-        return out  # in throttle units -1..1 (user decides mapping to actuator)
+        return out

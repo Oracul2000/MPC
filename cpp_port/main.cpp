@@ -1,12 +1,10 @@
 #include <cmath>
-#include <algorithm> // Для std::max
+#include <algorithm>
 #include "C16_CONTINENTAL_Tire_Data.h"
 #include "constants.h"
 
-// Используем std::max из <algorithm>
 using std::max;
 
-// Пространства имен для констант
 using namespace C16_CONTINENTAL_Tire_Data;
 using namespace CONSTANTS_JBS;
 
@@ -15,7 +13,6 @@ float sgn(float v) {
 	return (v > 0) - (v < 0);
 }
 
-// Структуры данных
 struct chassis {
 	double X, Y, yaw, vx, vy, w;
 };
@@ -69,6 +66,7 @@ public:
 		float Fy0 = Dy * sin(Cy * atan(By * alphay - Ey * (By * alphay - atan(By * alphay)))) + SVy;
 		return Fy0;
 	}
+
 	double combinedLateralSlip(double alpha_in, double kappa_in) {
 		double Fy0 = pureLateralSlip(alpha_in);
 		double kappas = kappa_in + SHyk;
@@ -79,12 +77,14 @@ public:
 		double Fy = Dyk * cos(Cyk * atan(Byk * kappas - Eyk * (Byk * kappas - atan(Byk * kappas)))) + SVyk;
 		return Fy;
 	}
+
 	double pureLongitudinalSlip(double kappa_in) {
 		double kappax = kappa_in + SHx;
 		double Ex = (PEX1 + PEX2 * dfz + PEX3 * dfz * dfz) * (1 - PEX4 * sgn(kappax)) * LEX;
 		double Fx0 = Dx * sin(Cx * atan(Bx * kappax - Ex * (Bx * kappax - atan(Bx * kappax)))) + Svx;
 		return Fx0;
 	}
+	
 	double combinedLongitudinalSlip(double alpha_in, double kappa_in) {
 		double Fx0 = pureLongitudinalSlip(kappa_in);
 		double Bxa = RBX1 * cos(atan(RBX2 * kappa_in)) * LXAL;
@@ -263,7 +263,6 @@ public:
 		return d_state;
 	}
     
-    // Метод получения текущего состояния шасси
     chassis getChassisState() const { return carState.body; }
 
 	void updateRK4(const controlInfluence& input) {

@@ -1,5 +1,5 @@
 # constants.py
-dt = 0.001
+dt = 0.01
 m = 300.0
 lf = 0.721
 lr = 0.823

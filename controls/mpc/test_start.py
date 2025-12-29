@@ -3,7 +3,7 @@ import casadi as ca
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 
-from casadi_frenet_model import *
+from controls.mpc.casadi_frenet_model import *
 
 
 dt_sim = 0.001  # Шаг интегрирования симуляции
@@ -63,11 +63,11 @@ class FrenetMPC:
         # --- ВЕСОВЫЕ КОЭФФИЦИЕНТЫ (Tuning) ---
         # Q: [s, ey, epsi, v, beta, r]
         # Высокий штраф на ey и epsi для точности, средний на v для поддержания скорости
-        Q = ca.diag(ca.vertcat(0.0, 0.0, 0.0, 100.0, 20.0, 1.0)) 
+        Q = ca.diag(ca.vertcat(0.0, 0.0, 0.0, 25.0, 5.0, 1.0)) 
         
         # R: [throttle, steering, brakes]
         # Штрафуем использование управления для плавности
-        R = ca.diag(ca.vertcat(1.0, 1.0, 1.0))
+        R = ca.diag(ca.vertcat(1.0, 10.0, 1.0))
 
         cost = 0
         g = [X[:, 0] - x0] # Начальное ограничение
@@ -101,8 +101,8 @@ class FrenetMPC:
         # throttle: [0, 1]
         # steering: [-0.5, 0.5] рад (~28 градусов)
         # brakes:   [0, 1]
-        lb_u = np.tile([0.0, -2.0, 0.0], N)
-        ub_u = np.tile([1.0,  2.0, 3.0], N)
+        lb_u = np.tile([0.0, -1.0, 0.0], N)
+        ub_u = np.tile([1.0,  1.0, 0.5], N)
 
         # Границы для X (nx * (N+1))
         # v >= 0
@@ -120,8 +120,8 @@ class FrenetMPC:
             
             # 1. Ограничение на ey (индекс 1)
             # Мы ставим жесткие рамки: машина не может выехать за пределы +/- 0.5 метра
-            lb_x[idx + 1] = -0.5
-            ub_x[idx + 1] = 0.5
+            lb_x[idx + 1] = -1
+            ub_x[idx + 1] = 1
             
             # 2. Ограничение на скорость v (индекс 3) >= 0
             lb_x[idx + 3] = 0.0
@@ -180,116 +180,116 @@ class FrenetMPC:
 # ==========================================
 # MAIN LOOP
 # ==========================================
+if __name__ == '__main__':
+    # 1. Build Path
+    x_cl, y_cl = generate_centerline()
+    s_cl = compute_arc_length(x_cl, y_cl)
+    kappa_cl = compute_curvature(x_cl, y_cl, s_cl)
+    kappa_fun = build_kappa_function(s_cl, kappa_cl)
 
-# 1. Build Path
-x_cl, y_cl = generate_centerline()
-s_cl = compute_arc_length(x_cl, y_cl)
-kappa_cl = compute_curvature(x_cl, y_cl, s_cl)
-kappa_fun = build_kappa_function(s_cl, kappa_cl)
+    # 2. Init MPC
+    # dt в MPC (0.05) больше, чем dt симуляции (0.01), чтобы смотреть дальше
+    mpc = FrenetMPC(kappa_fun, N=30, dt=0.01) 
 
-# 2. Init MPC
-# dt в MPC (0.05) больше, чем dt симуляции (0.01), чтобы смотреть дальше
-mpc = FrenetMPC(kappa_fun, N=30, dt=0.01) 
+    # Initial state: [s, ey, epsi, v, beta, r]
+    x = np.array([0.0, 0.0, 0.0, 10.0, 0.0, 0.0]) 
 
-# Initial state: [s, ey, epsi, v, beta, r]
-x = np.array([0.0, 0.0, 0.0, 10.0, 0.0, 0.0]) 
+    # Initial guess inputs [throttle, steering, brakes]
+    u_guess = np.array([1.0, 0.0, 0.0]) 
 
-# Initial guess inputs [throttle, steering, brakes]
-u_guess = np.array([1.0, 0.0, 0.0]) 
+    traj = [x]
+    controls = []
 
-traj = [x]
-controls = []
+    v_ref = 15.0 # Целевая скорость 15 м/с
 
-v_ref = 15.0 # Целевая скорость 15 м/с
-
-print("Запуск симуляции MPC...")
-for i in range(200):
-    # Решаем MPC
-    X_pred, U_pred = mpc.solve(x, v_ref, u_guess)
-    
-    # Берем первое оптимальное управление
-    u_control = U_pred[0] # [throttle, steering, brakes]
-    
-    # Симуляция реального шага (Integration sub-stepping)
-    # Используем ту же функцию физики для симуляции
-    # Делаем несколько маленьких шагов, пока MPC думает "медленно"
-    sim_steps = int(mpc.dt / dt_sim) # например 0.05 / 0.01 = 5 шагов
-    
-    current_x_dm = ca.DM(x)
-    u_dm = ca.DM(u_control)
-    
-    for _ in range(sim_steps):
-        x_dot = mpc.f_dynamics(current_x_dm, u_dm)
-        current_x_dm += x_dot * dt_sim
+    print("Запуск симуляции MPC...")
+    for i in range(200):
+        # Решаем MPC
+        X_pred, U_pred = mpc.solve(x, v_ref, u_guess)
         
-    x = current_x_dm.full().flatten()
-    
-    # Сохраняем историю
-    traj.append(x)
-    controls.append(u_control)
-    
-    # Warm start для следующего шага
-    u_guess = U_pred[1] if mpc.N > 1 else U_pred[0]
-    
-    if i % 20 == 0:
-        print(f"Step {i}: s={x[0]:.2f}, v={x[3]:.2f}, ey={x[1]:.3f}, throt={u_control[0]:.2f}")
+        # Берем первое оптимальное управление
+        u_control = U_pred[0] # [throttle, steering, brakes]
+        
+        # Симуляция реального шага (Integration sub-stepping)
+        # Используем ту же функцию физики для симуляции
+        # Делаем несколько маленьких шагов, пока MPC думает "медленно"
+        sim_steps = int(mpc.dt / dt_sim) # например 0.05 / 0.01 = 5 шагов
+        
+        current_x_dm = ca.DM(x)
+        u_dm = ca.DM(u_control)
+        
+        for _ in range(sim_steps):
+            x_dot = mpc.f_dynamics(current_x_dm, u_dm)
+            current_x_dm += x_dot * dt_sim
+            
+        x = current_x_dm.full().flatten()
+        
+        # Сохраняем историю
+        traj.append(x)
+        controls.append(u_control)
+        
+        # Warm start для следующего шага
+        u_guess = U_pred[1] if mpc.N > 1 else U_pred[0]
+        
+        if i % 20 == 0:
+            print(f"Step {i}: s={x[0]:.2f}, v={x[3]:.2f}, ey={x[1]:.3f}, throt={u_control[0]:.2f}")
 
-traj = np.array(traj)
-controls = np.array(controls)
+    traj = np.array(traj)
+    controls = np.array(controls)
 
-# ==========================================
-# VISUALIZATION
-# ==========================================
+    # ==========================================
+    # VISUALIZATION
+    # ==========================================
 
-# 1. Trajectory Re-mapping
-dx_ds = np.gradient(x_cl, s_cl)
-dy_ds = np.gradient(y_cl, s_cl)
-theta_cl = np.arctan2(dy_ds, dx_ds)
+    # 1. Trajectory Re-mapping
+    dx_ds = np.gradient(x_cl, s_cl)
+    dy_ds = np.gradient(y_cl, s_cl)
+    theta_cl = np.arctan2(dy_ds, dx_ds)
 
-sx = CubicSpline(s_cl, x_cl)
-sy = CubicSpline(s_cl, y_cl)
-stheta = CubicSpline(s_cl, theta_cl)
+    sx = CubicSpline(s_cl, x_cl)
+    sy = CubicSpline(s_cl, y_cl)
+    stheta = CubicSpline(s_cl, theta_cl)
 
-traj_s = traj[:, 0]
-traj_ey = traj[:, 1]
-traj_epsi = traj[:, 2]
+    traj_s = traj[:, 0]
+    traj_ey = traj[:, 1]
+    traj_epsi = traj[:, 2]
 
-# Избегаем выхода за пределы сплайна (clamp s)
-traj_s = np.clip(traj_s, s_cl[0], s_cl[-1])
+    # Избегаем выхода за пределы сплайна (clamp s)
+    traj_s = np.clip(traj_s, s_cl[0], s_cl[-1])
 
-x_traj = sx(traj_s) - traj_ey * np.sin(stheta(traj_s))
-y_traj = sy(traj_s) + traj_ey * np.cos(stheta(traj_s))
+    x_traj = sx(traj_s) - traj_ey * np.sin(stheta(traj_s))
+    y_traj = sy(traj_s) + traj_ey * np.cos(stheta(traj_s))
 
-# 2. Plots
-plt.figure(figsize=(12, 10))
+    # 2. Plots
+    plt.figure(figsize=(12, 10))
 
-plt.subplot(3, 1, 1)
-plt.plot(x_cl, y_cl, 'k--', label='Centerline')
-plt.plot(x_traj, y_traj, 'r-', linewidth=2, label='MPC Trajectory')
-plt.ylabel('Y [m]')
-plt.xlabel('X [m]')
-plt.legend()
-plt.title('Path Tracking')
-plt.axis('equal')
-plt.grid(True)
+    plt.subplot(3, 1, 1)
+    plt.plot(x_cl, y_cl, 'k--', label='Centerline')
+    plt.plot(x_traj, y_traj, 'r-', linewidth=2, label='MPC Trajectory')
+    plt.ylabel('Y [m]')
+    plt.xlabel('X [m]')
+    plt.legend()
+    plt.title('Path Tracking')
+    plt.axis('equal')
+    plt.grid(True)
 
-plt.subplot(3, 1, 2)
-plt.plot(traj[:, 3], label='Velocity')
-plt.axhline(v_ref, color='g', linestyle='--', label='Reference')
-plt.ylabel('Speed [m/s]')
-plt.legend()
-plt.grid(True)
+    plt.subplot(3, 1, 2)
+    plt.plot(traj[:, 3], label='Velocity')
+    plt.axhline(v_ref, color='g', linestyle='--', label='Reference')
+    plt.ylabel('Speed [m/s]')
+    plt.legend()
+    plt.grid(True)
 
-plt.subplot(3, 1, 3)
-plt.plot(controls[:, 0], label='Throttle')
-plt.plot(controls[:, 1], label='Steering')
-plt.plot(controls[:, 2], label='Brakes')
-plt.ylabel('Control Inputs')
-plt.xlabel('Step')
-plt.legend()
-plt.grid(True)
+    plt.subplot(3, 1, 3)
+    plt.plot(controls[:, 0], label='Throttle')
+    plt.plot(controls[:, 1], label='Steering')
+    plt.plot(controls[:, 2], label='Brakes')
+    plt.ylabel('Control Inputs')
+    plt.xlabel('Step')
+    plt.legend()
+    plt.grid(True)
 
-plt.tight_layout()
-# plt.show()
+    plt.tight_layout()
+    # plt.show()
 
-plt.savefig('./controls/mpc/test_start.png')
+    plt.savefig('./controls/mpc/test_start.png')

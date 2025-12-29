@@ -4,7 +4,111 @@ from scipy.interpolate import CubicSpline
 from matplotlib import pyplot as plt
 
 # Предполагаем, что constants.py находится рядом
-from constants import * 
+# from constants import * 
+
+import matplotlib as mpl
+
+# Глобальная настройка
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Times New Roman'] + mpl.rcParams['font.serif']
+
+
+# constants.py
+dt = 0.001
+m = 300.0
+lf = 0.721
+lr = 0.823
+Cm = 3600.0
+Crr = 200.0
+Cd = 1.53
+Cbf = 5411.0
+Cbr = 2650.0
+Cx = -20000
+Iz = 134.0
+g = 9.81
+
+
+def cartesian_to_frenet(x, y, yaw, v, beta, r, path_x, path_y, path_yaw, path_s):
+    """
+    Переводит состояние из глобальных координат в Frenet.
+    
+    Args:
+        x, y, yaw: Текущие координаты и угол автомобиля.
+        v, beta, r: Скорость, угол скольжения, yaw rate (копируются как есть).
+        path_x, path_y: Массивы координат centerline.
+        path_yaw: Массив углов ориентации centerline.
+        path_s: Массив длины дуги centerline.
+        
+    Returns:
+        np.array: [s, ey, epsi, v, beta, r]
+    """
+    # 1. Находим индекс ближайшей точки пути
+    dx = path_x - x
+    dy = path_y - y
+    d = dx**2 + dy**2
+    min_idx = np.argmin(d)
+    
+    # Параметры ближайшей точки reference
+    s_r = path_s[min_idx]
+    x_r = path_x[min_idx]
+    y_r = path_y[min_idx]
+    theta_r = path_yaw[min_idx]
+    
+    # 2. Вычисляем e_y (Lateral Error)
+    # Вектор от пути к машине
+    dx_val = x - x_r
+    dy_val = y - y_r
+    
+    # e_y — это проекция вектора (dx, dy) на перпендикуляр к траектории.
+    # Формула кросс-продукта для 2D (или поворот осей):
+    # ey > 0 если машина слева, ey < 0 если справа.
+    ey = -dx_val * np.sin(theta_r) + dy_val * np.cos(theta_r)
+    
+    # 3. Вычисляем e_psi (Heading Error)
+    epsi = yaw - theta_r
+    
+    # Нормализация угла epsi в диапазон [-pi, pi]
+    epsi = (epsi + np.pi) % (2 * np.pi) - np.pi
+    
+    # v, beta, r остаются без изменений в вашей формулировке
+    return np.array([s_r, ey, epsi, v, beta, r])
+
+
+def frenet_to_cartesian(s, ey, epsi, v, beta, r, splines):
+    """
+    Переводит состояние из Frenet в глобальные координаты.
+    
+    Args:
+        s, ey, epsi: Координаты Френе.
+        v, beta, r: Динамические переменные (копируются).
+        splines: Словарь или объект, содержащий сплайны sx, sy, stheta.
+                 Пример: {'x': sx, 'y': sy, 'theta': stheta}
+                 
+    Returns:
+        np.array: [x, y, yaw, v, beta, r]
+    """
+    sx = splines['x']
+    sy = splines['y']
+    stheta = splines['theta']
+
+    # 1. Получаем Reference состояние в точке s
+    x_r = sx(s)
+    y_r = sy(s)
+    theta_r = stheta(s)
+    
+    # 2. Пересчитываем в глобальные координаты
+    # Формула: pos = pos_ref + ey * normal_vector
+    # normal_vector = [-sin(theta), cos(theta)] для поворота на +90 (влево)
+    x = x_r - ey * np.sin(theta_r)
+    y = y_r + ey * np.cos(theta_r)
+    
+    # 3. Глобальный угол
+    yaw = theta_r + epsi
+    
+    # Нормализация угла
+    yaw = (yaw + np.pi) % (2 * np.pi) - np.pi
+    
+    return np.array([x, y, yaw, v, beta, r])
 
 
 def generate_centerline():
